@@ -1,0 +1,37 @@
+/**
+ * POST /admin/refresh
+ *
+ * Clears the in-memory cache and triggers a full reload from the GitHub API.
+ * Protected by Bearer token (MCP_REFRESH_TOKEN env var).
+ * Called by the GitHub Action in awesome-autonomous-business on every push to terms/*.md.
+ */
+
+import { Request, Response } from 'express'
+import { clearCache, loadCache } from '../cache/termCache'
+
+export interface RefreshResponse {
+  status:       'ok'
+  terms_loaded: number
+  duration_ms:  number
+}
+
+export async function handleAdminRefresh(req: Request, res: Response): Promise<void> {
+  const token = process.env.MCP_REFRESH_TOKEN
+  const authHeader = req.headers['authorization'] ?? ''
+  const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+
+  if (!token || provided !== token) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  try {
+    clearCache()
+    const { termsLoaded, durationMs } = await loadCache()
+    const body: RefreshResponse = { status: 'ok', terms_loaded: termsLoaded, duration_ms: durationMs }
+    res.json(body)
+  } catch (err) {
+    console.error('[admin/refresh] Cache reload failed:', err)
+    res.status(500).json({ error: 'Cache reload failed', message: String(err) })
+  }
+}
