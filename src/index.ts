@@ -10,7 +10,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 
-import { loadCache } from './cache/termCache'
+import { loadCache, getCache, getLastRefreshed, isCacheStale } from './cache/termCache'
 import { handleAdminRefresh } from './admin/refresh'
 import { lookupTerm } from './tools/lookupTerm'
 import { getRelatedTerms } from './tools/getRelatedTerms'
@@ -19,14 +19,14 @@ import { citeTerm } from './tools/citeTerm'
 import { getSources } from './tools/getSources'
 
 // ---------------------------------------------------------------------------
-// Rate limiters (must be configured before deployment)
+// Rate limiters — configured before deployment per CLAUDE.md hard constraint
 // ---------------------------------------------------------------------------
 
-const standardLimit = rateLimit({ windowMs: 60_000, max: 300 })
+const standardLimit  = rateLimit({ windowMs: 60_000, max: 300 })
 const alignmentLimit = rateLimit({ windowMs: 60_000, max: 60 })
 
 // ---------------------------------------------------------------------------
-// MCP server + tool registration (stubs — implementations pending)
+// MCP server + tool registration
 // ---------------------------------------------------------------------------
 
 const server = new Server(
@@ -89,7 +89,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params
-  // Tool dispatch — implementations pending
   switch (name) {
     case 'lookup_term':
       return { content: [{ type: 'text', text: JSON.stringify(await lookupTerm(args as any)) }] }
@@ -113,12 +112,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 const app = express()
 app.use(express.json())
 
+// Rate-limit MCP tool endpoints via Express middleware on known paths
+app.use('/tools/verify_alignment', alignmentLimit)
+app.use('/tools', standardLimit)
+
 app.post('/admin/refresh', handleAdminRefresh)
 
 app.get('/health', (_req, res) => {
-  // TODO: return real cache stats once loadCache is implemented
-  res.json({ status: 'ok' })
+  const lastRefreshed = getLastRefreshed()
+  const termCount     = getCache().size
+  const uptimeSeconds = Math.floor(process.uptime())
+
+  let ttlRemainingHours: number | null = null
+  if (lastRefreshed) {
+    const ageMs = Date.now() - lastRefreshed.getTime()
+    ttlRemainingHours = Math.max(0, Math.round((24 * 3600_000 - ageMs) / 3600_000 * 10) / 10)
+  }
+
+  res.json({
+    status: 'ok',
+    cache: {
+      term_count:           termCount,
+      last_refreshed:       lastRefreshed?.toISOString() ?? null,
+      ttl_remaining_hours:  ttlRemainingHours,
+    },
+    uptime_seconds: uptimeSeconds,
+  })
 })
+
+// ---------------------------------------------------------------------------
+// TTL watchdog — reloads cache every 24 hours as a safety net
+// ---------------------------------------------------------------------------
+
+function startTtlWatchdog(): void {
+  const CHECK_INTERVAL_MS = 60 * 60 * 1000 // check every hour
+
+  setInterval(() => {
+    if (isCacheStale()) {
+      console.log('[watchdog] Cache is stale — reloading')
+      loadCache().catch((err) => console.error('[watchdog] Cache reload failed:', err))
+    }
+  }, CHECK_INTERVAL_MS).unref() // unref so the interval does not prevent process exit
+}
 
 // ---------------------------------------------------------------------------
 // Startup
@@ -126,6 +161,8 @@ app.get('/health', (_req, res) => {
 
 async function main(): Promise<void> {
   await loadCache()
+
+  startTtlWatchdog()
 
   const transport = new StdioServerTransport()
   await server.connect(transport)
