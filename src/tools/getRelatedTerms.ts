@@ -2,13 +2,17 @@
  * get_related_terms — returns graph-style relationships for a given term.
  */
 
+import { getCache, isCacheLoading } from '../cache/termCache'
+import { fuzzyFindTerm } from '../lib/fuzzyMatch'
+import { usageLog } from '../lib/usageLog'
+
 export interface GetRelatedTermsInput {
   term: string
 }
 
 export interface GetRelatedTermsOutput {
-  term:  string
-  slug:  string
+  term:    string
+  slug:    string
   related: Array<{
     slug:         string
     title:        string
@@ -22,11 +26,32 @@ export type GetRelatedTermsError =
   | { error: 'TERM_NOT_FOUND'; message: string; suggestions: string[] }
   | { error: 'CACHE_UNAVAILABLE'; message: string }
 
-/**
- * Handles the get_related_terms MCP tool call.
- */
 export async function getRelatedTerms(
   input: GetRelatedTermsInput
 ): Promise<GetRelatedTermsOutput | GetRelatedTermsError> {
-  throw new Error('Not implemented')
+  const cache = getCache()
+
+  if (isCacheLoading()) {
+    return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
+  }
+
+  const term = fuzzyFindTerm(input.term, cache)
+
+  if (!term) {
+    const suggestions = [...cache.values()].slice(0, 3).map(t => t.title)
+    void usageLog({ tool: 'get_related_terms' })
+    return {
+      error: 'TERM_NOT_FOUND',
+      message: `No Lexicon entry found for: '${input.term}'`,
+      suggestions,
+    }
+  }
+
+  void usageLog({ tool: 'get_related_terms', term_slug: term.slug })
+
+  return {
+    term:    term.title,
+    slug:    term.slug,
+    related: term.related_terms,
+  }
 }
