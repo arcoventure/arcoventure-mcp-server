@@ -1,13 +1,13 @@
 /**
  * MCP server entry point.
- * Registers all tools, sets up Express routes, starts the HTTP server.
- * Calls loadCache() on startup. Starts TTL watchdog for 24-hour reload.
+ * Uses StreamableHTTPServerTransport (HTTP + SSE) — not stdio.
+ * Express starts first so /health is available immediately.
  */
 
 import express from 'express'
 import rateLimit from 'express-rate-limit'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 
 import { loadCache, getCache, getLastRefreshed, isCacheStale } from './cache/termCache'
@@ -29,12 +29,12 @@ const alignmentLimit = rateLimit({ windowMs: 60_000, max: 60 })
 // MCP server + tool registration
 // ---------------------------------------------------------------------------
 
-const server = new Server(
+const mcpServer = new Server(
   { name: 'arcoventure-lexicon', version: '0.1.0' },
   { capabilities: { tools: {} } }
 )
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
+mcpServer.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'lookup_term',
@@ -87,7 +87,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }))
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params
   switch (name) {
     case 'lookup_term':
@@ -106,18 +106,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 })
 
 // ---------------------------------------------------------------------------
-// Express app — admin + health endpoints
+// Express app
 // ---------------------------------------------------------------------------
 
 const app = express()
 app.use(express.json())
 
-// Rate-limit MCP tool endpoints via Express middleware on known paths
-app.use('/tools/verify_alignment', alignmentLimit)
-app.use('/tools', standardLimit)
+// Rate limits
+app.use('/mcp', (req, _res, next) => {
+  if (req.body?.method === 'tools/call' &&
+      req.body?.params?.name === 'verify_alignment') {
+    return alignmentLimit(req, _res, next)
+  }
+  return standardLimit(req, _res, next)
+})
 
+// MCP endpoint — handles all MCP traffic (GET for SSE, POST for messages)
+app.all('/mcp', async (req, res) => {
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+  await mcpServer.connect(transport)
+  await transport.handleRequest(req, res, req.body)
+  res.on('finish', () => transport.close())
+})
+
+// Admin
 app.post('/admin/refresh', handleAdminRefresh)
 
+// Health
 app.get('/health', (_req, res) => {
   const lastRefreshed = getLastRefreshed()
   const termCount     = getCache().size
@@ -132,9 +147,9 @@ app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     cache: {
-      term_count:           termCount,
-      last_refreshed:       lastRefreshed?.toISOString() ?? null,
-      ttl_remaining_hours:  ttlRemainingHours,
+      term_count:          termCount,
+      last_refreshed:      lastRefreshed?.toISOString() ?? null,
+      ttl_remaining_hours: ttlRemainingHours,
     },
     uptime_seconds: uptimeSeconds,
   })
@@ -145,32 +160,31 @@ app.get('/health', (_req, res) => {
 // ---------------------------------------------------------------------------
 
 function startTtlWatchdog(): void {
-  const CHECK_INTERVAL_MS = 60 * 60 * 1000 // check every hour
-
   setInterval(() => {
     if (isCacheStale()) {
       console.log('[watchdog] Cache is stale — reloading')
       loadCache().catch((err) => console.error('[watchdog] Cache reload failed:', err))
     }
-  }, CHECK_INTERVAL_MS).unref() // unref so the interval does not prevent process exit
+  }, 60 * 60 * 1000).unref()
 }
 
 // ---------------------------------------------------------------------------
-// Startup
+// Startup — Express listens first, then cache loads, then MCP is ready
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  await loadCache()
-
-  startTtlWatchdog()
-
-  const transport = new StdioServerTransport()
-  await server.connect(transport)
-
   const port = process.env.PORT ?? 3000
-  app.listen(port, () => {
-    console.log(`arcoventure-mcp-server listening on port ${port}`)
+
+  await new Promise<void>((resolve) => {
+    app.listen(port, () => {
+      console.log(`arcoventure-mcp-server listening on port ${port}`)
+      resolve()
+    })
   })
+
+  await loadCache()
+  startTtlWatchdog()
+  console.log(`Cache loaded — ${getCache().size} terms ready`)
 }
 
 main().catch((err) => {
