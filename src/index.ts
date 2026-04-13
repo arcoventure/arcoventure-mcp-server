@@ -182,9 +182,13 @@ async function main(): Promise<void> {
     })
   })
 
-  await loadCache()
+  try {
+    await loadCache()
+    console.log(`Cache loaded — ${getCache().size} terms ready`)
+  } catch (err) {
+    console.error('[startup] Cache load failed — server will keep running, retry via POST /admin/refresh:', err)
+  }
   startTtlWatchdog()
-  console.log(`Cache loaded — ${getCache().size} terms ready`)
 }
 
 main().catch((err) => {
