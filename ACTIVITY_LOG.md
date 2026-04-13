@@ -63,3 +63,29 @@
 
 ### Next Step
 - Implement `src/parser/markdownParser.ts` — this unblocks cache load and all tool logic
+
+---
+
+## 2026-04-13
+
+**Session:** Phase 1 — Full implementation
+**Branch:** claude/friendly-yalow
+
+### Done
+- Implemented `markdownParser.ts` — 22 tests passing
+- Implemented `fuzzyMatch.ts` — 26 tests passing; short-input guard (≤4 chars) blocks false positives on generic words
+- Implemented `githubFetcher.ts` — GitHub API list + content fetch with Bearer token support
+- Implemented `termCache.ts` — `loadCache()` with `isCacheLoading` flag; tools return CACHE_UNAVAILABLE only during active load window
+- Implemented `usageLog.ts` — fire-and-forget Supabase write; silent no-op when env vars absent in dev
+- Implemented all 5 tools: `lookupTerm`, `getRelatedTerms`, `getSources`, `citeTerm`, `verifyAlignment`
+  - `citeTerm` injects access dates via `new Date()` at call time — never hardcoded
+  - `getSources` fallback: GitHub raw file URL returned as SUPPORTING source when no sources parsed
+  - `verifyAlignment` Phase 1: n-gram detection + STRONG_CONTEXT word scoring; Phase 2 refines co-occurrence
+- Implemented `admin/refresh.ts` — Bearer token auth, clearCache + loadCache, structured error response
+- All 61 tests passing across 3 suites
+
+### Blockers
+- None
+
+### Next Step
+- TypeScript build check (`npm run build`) then Railway deploy prep (env vars, health endpoint wiring)
