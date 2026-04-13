@@ -8,13 +8,30 @@
 **Branch:** main
 
 ### Done
-- Repository created at `github.com/arcoventure/arcoventure-mcp-server`
-- `CLAUDE.md` committed and pushed — session initialisation prompt covering product purpose, session protocol, all five tool definitions, data source structure, environment variables, hard constraints, unit test requirements, and related repositories
+- Repository created ...
+- CLAUDE.md committed and pushed ...
 
 ### Blockers
-- Lexicon Markdown audit not yet complete. Every term file in `arcoventure/awesome-autonomous-business` must have a blockquote definition and `## Metadata` section with `first_used` before Phase 1 coding begins. This is a hard gate — no code is written until the audit passes.
+- Lexicon Markdown audit not yet complete ...
 
 ### Next Step
-- Complete Lexicon audit across all term files in `awesome-autonomous-business`
-- Create `ACTIVITY_LOG.md` entry once audit is complete and all failing terms are fixed
-- Begin Phase 1: repository scaffold, TypeScript setup, `package.json`, `tsconfig.json`
+- Complete Lexicon audit ...
+
+---
+
+## 2026-04-13
+
+**Session:** Pre-build audit
+**Branch:** main
+
+### Done
+- Lexicon audit complete — all 54 term files pass parser requirements
+- Metadata migrated to Option B format (**First used:** / **Pillar:**)
+- CLAUDE.md updated to reflect new file structure and parser spec
+- Phase 1 coding unblocked
+
+### Blockers
+- None
+
+### Next Step
+- Phase 1 scaffold — package.json, TypeScript setup, cache, parser, tools
