@@ -81,20 +81,28 @@ arcoventure-mcp-server/
 {Extended definition — prose}
 
 ## Related Terms
-- [Term Name](/lexicon/slug) — {relationship description}
+- [Term Name](https://arcoventure.studio/lexicon/slug) — {relationship description}
 
-## Sources
-- [Article Title](/blog/slug) — {type: blog_article | lexicon_entry | wiki | podcast}
+## Articles
+- [Article Title](https://arcoventure.studio/blog/slug)
+
+## References
+- [Lexicon](https://arcoventure.studio/lexicon/slug) — canonical definition
+- [Wiki](https://wiki.arcoventure.studio/docs/slug) — extended entry
 
 ## Metadata
-first_used: YYYY-MM-DD
-pillar: {How We Think | How We Build | How We Operate}
+
+**First used:** YYYY-MM-DD  
+**Pillar:** {How We Think | What We Observe | What We've Learned}
 ```
 
 **Parser behaviour:**
 - Terms missing the blockquote definition or `## Metadata` section are excluded from the cache with a warning logged.
-- Terms missing `## Sources` are included but `get_sources` returns an empty array with the raw GitHub file URL as a fallback SUPPORTING source.
+- Metadata fields are parsed as bold-labelled key-value pairs: `**First used:**` and `**Pillar:**`, each on its own line.
+- Parser regex: `\*\*First used:\*\*\s+(\d{4}-\d{2}-\d{2})` and `\*\*Pillar:\*\*\s+(.+)`
+- Terms missing `## Articles` are included but `get_sources` returns an empty array with the raw GitHub file URL as a fallback SUPPORTING source.
 - Terms missing `## Related Terms` are included but `get_related_terms` returns an empty array.
+- `## References` is used to populate source URLs for `get_sources` — both Lexicon and Wiki entries are extracted.
 
 **Cache behaviour:**
 - On startup: fetch all term files from GitHub API, parse into TermObject, store in Map keyed by slug.
@@ -117,7 +125,7 @@ interface TermObject {
   related_terms:         RelatedTerm[]
   sources:               Source[]
   first_used?:           string
-  pillar?:               string
+  pillar?:               'How We Think' | 'What We Observe' | "What We've Learned"
 }
 
 interface RelatedTerm {
@@ -459,7 +467,7 @@ Three modules require full test coverage before Phase 1 ships. These are the sil
 
 | Module | What to test |
 |---|---|
-| `markdownParser.ts` | Missing sections, malformed blockquotes, missing metadata, extra whitespace, empty files, terms with no related terms, terms with no sources |
+| `markdownParser.ts` | Missing sections, malformed blockquotes, missing metadata, extra whitespace, empty files, terms with no related terms, terms with no sources, metadata on same line (`**First used:** ... **Pillar:**` must be separate lines), invalid pillar values |
 | `fuzzyMatch.ts` | Exact matches, distance-1 variants, distance-2 variants, distance-3 rejections, slug variants, title case variants, false positive cases (generic words that should not match) |
 | `verifyAlignment.ts` | Term detection, co-occurrence check (architectural vs generic usage), scoring edge cases, NO_TERMS_DETECTED path, multi-term input, max-length input |
 
@@ -476,7 +484,7 @@ Run tests with `npm test` before every commit to `main`.
 | Phase 3 | Try Now page at arcoventure.studio/try | Week 2 |
 | Phase 4 | Claude marketplace, awesome-mcp-servers, mcpmarket.com, mcp.so | Week 3 |
 
-Phase 1 does not begin until the Lexicon Markdown audit is complete. Every term file in `arcoventure/awesome-autonomous-business` must have a blockquote definition and a `## Metadata` section with `first_used` before Phase 1 coding starts.
+Phase 1 does not begin until the Lexicon Markdown audit is complete. Every term file in `arcoventure/awesome-autonomous-business` must have a blockquote definition and a `## Metadata` section with `**First used:**` and `**Pillar:**` before Phase 1 coding starts.
 
 ---
 
