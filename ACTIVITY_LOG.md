@@ -115,3 +115,23 @@
 
 ### Next Step
 - Set up Supabase `mcp_usage_log` table (run SQL migration in arcoventure-wiki Supabase project, add env vars to Railway)
+
+---
+
+## 2026-04-13
+
+**Session:** Phase 2 — Supabase mcp_usage_log
+**Branch:** claude/friendly-yalow
+
+### Done
+- Created `mcp_usage_log` table in arcoventure-cms Supabase project (CMS is the data hub for all Arco lexicon content)
+- Added indexes on `tool` and `created_at DESC`
+- Added `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` to Railway service Variables
+- Verified end-to-end: `lookup_term` call writes row to `mcp_usage_log` with correct `term_slug`; nullable fields (`input_summary`, `verdict`, `caller_agent`, `referer_domain`) are null as expected for non-verify_alignment tools
+- Phase 2 complete
+
+### Blockers
+- None
+
+### Next Step
+- Phase 3: Try Now page at arcoventure.studio/try
