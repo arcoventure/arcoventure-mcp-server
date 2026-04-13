@@ -89,3 +89,29 @@
 
 ### Next Step
 - TypeScript build check (`npm run build`) then Railway deploy prep (env vars, health endpoint wiring)
+
+---
+
+## 2026-04-13
+
+**Session:** Phase 2 — verifyAlignment co-occurrence scoring
+**Branch:** claude/friendly-yalow
+
+### Done
+- Refactored `verifyAlignment.ts` scoring to two-tier vocabulary:
+  - `ARCO_SPECIFIC` set: `agentic`, `stewardship`, `coordination`, `delegation`, `orchestrate`, `autonomous`, `operator` — score 0.85 (ALIGNED)
+  - `STRONG_BUSINESS` set: general business/AI vocabulary — score 0.75 (≥2 hits) or 0.60 (1 hit)
+  - No context hits → 0.30 (NEEDS_CLARIFICATION)
+- Expanded `verifyAlignment.test.ts` from 13 → 23 tests:
+  - Added `beforeEach`/`afterEach` to seed/clear in-memory cache with test TermObjects
+  - Added ARCO_SPECIFIC tier tests (3 cases)
+  - Added STRONG_BUSINESS tier tests (3 cases: 0.75, 0.60, 0.30)
+  - Added false-positive prevention tests (3 cases)
+  - Added multi-term overall scoring test
+- All 71 tests passing across 3 suites
+
+### Blockers
+- None
+
+### Next Step
+- Set up Supabase `mcp_usage_log` table (run SQL migration in arcoventure-wiki Supabase project, add env vars to Railway)

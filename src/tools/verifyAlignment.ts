@@ -3,8 +3,15 @@
  * Deterministic, rule-based scoring only — no LLM calls.
  * Max input: 5,000 characters.
  *
- * Phase 1 implementation: term detection + context scoring.
- * Phase 2 will add sentence co-occurrence refinements.
+ * Phase 2 scoring: two-tier context vocabulary.
+ * ARCO_SPECIFIC words are strong signals of Arco architectural intent.
+ * STRONG_BUSINESS words are weaker business/AI signals.
+ *
+ * Score tiers:
+ *   ARCO_SPECIFIC hit             → 0.85 (ALIGNED)
+ *   STRONG_BUSINESS ≥ 2 hits      → 0.75 (PARTIALLY_ALIGNED)
+ *   STRONG_BUSINESS 1 hit         → 0.60 (PARTIALLY_ALIGNED)
+ *   no context hits               → 0.30 (NEEDS_CLARIFICATION)
  */
 
 import { AlignmentResult } from '../types'
@@ -15,13 +22,18 @@ import { TermObject } from '../types'
 
 const MAX_INPUT = 5_000
 
-// Words that signal a business/AI architectural context
-const STRONG_CONTEXT = new Set([
-  'business', 'company', 'startup', 'venture', 'agentic', 'agent',
-  'autonomous', 'operator', 'revenue', 'operations', 'workflow',
-  'coordination', 'delegation', 'handoff', 'infrastructure', 'stack',
-  'platform', 'architecture', 'enterprise', 'automate', 'automated',
-  'automation', 'orchestrate', 'orchestration',
+// Vocabulary that strongly signals Arco architectural intent
+const ARCO_SPECIFIC = new Set([
+  'agentic', 'stewardship', 'coordination', 'delegation',
+  'orchestrate', 'autonomous', 'operator',
+])
+
+// General business/AI vocabulary — weaker signal
+const STRONG_BUSINESS = new Set([
+  'business', 'company', 'startup', 'venture', 'agent',
+  'revenue', 'operations', 'workflow', 'handoff', 'infrastructure',
+  'stack', 'platform', 'architecture', 'enterprise', 'automate',
+  'automated', 'automation', 'orchestration',
 ])
 
 export interface VerifyAlignmentInput {
@@ -131,21 +143,25 @@ function buildNgrams(words: string[], maxN: number): string[] {
 
 /**
  * Scores a match based on sentence-level context.
- * Checks for strong business/architectural vocabulary in the sentence.
+ * Two-tier vocabulary: ARCO_SPECIFIC words score higher than STRONG_BUSINESS.
  */
 function scoreMatch(term: TermObject, sentence: string): number {
-  const tokens = new Set(normalise(sentence).split(/\s+/))
-
-  // Count strong context words present in the sentence (excluding the term itself)
+  const tokens = normalise(sentence).split(/\s+/)
   const termWords = new Set(normalise(term.title).split(/\s+/))
-  let contextHits = 0
+
+  let arcoHits = 0
+  let businessHits = 0
+
   for (const token of tokens) {
-    if (!termWords.has(token) && STRONG_CONTEXT.has(token)) contextHits++
+    if (termWords.has(token)) continue   // skip the term's own words
+    if (ARCO_SPECIFIC.has(token))   arcoHits++
+    else if (STRONG_BUSINESS.has(token)) businessHits++
   }
 
-  if (contextHits >= 2) return 0.85   // ALIGNED
-  if (contextHits === 1) return 0.65  // PARTIALLY_ALIGNED
-  return 0.30                         // NEEDS_CLARIFICATION — no clear architectural context
+  if (arcoHits >= 1)        return 0.85  // ALIGNED — Arco-specific language present
+  if (businessHits >= 2)    return 0.75  // PARTIALLY_ALIGNED — multiple business signals
+  if (businessHits === 1)   return 0.60  // PARTIALLY_ALIGNED — weak business signal
+  return 0.30                            // NEEDS_CLARIFICATION — no architectural context
 }
 
 function scoreToVerdict(score: number): AlignmentResult['verdict'] {
