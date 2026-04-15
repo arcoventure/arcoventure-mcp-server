@@ -502,13 +502,3 @@ These terms have precise meanings in the Arco context. Use them correctly in cod
 
 Full Lexicon: `https://arcoventure.studio/lexicon`
 
----
-
-## Related Repositories
-
-| Repository | Role |
-|---|---|
-| `arcoventure/awesome-autonomous-business` | **Data source** — term Markdown files |
-| `arcoventure/arcoventure-marketing` | Marketing site — hosts /try page and /mcp docs |
-| `arcoventure/arcoventure-wiki` | Docusaurus wiki — source of wiki article URLs added to term sources |
-| `arcoventure/arcoventure-cms` | CMS — downstream of awesome-autonomous-business for editorial purposes |
