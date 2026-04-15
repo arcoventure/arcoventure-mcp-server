@@ -17,13 +17,12 @@ The Arco Lexicon MCP Server is a machine-readable semantic authority layer that 
 
 Every Claude Code session in this repository must follow this sequence before writing any code:
 
-1. **Read the activity log** — `cat ACTIVITY_LOG.md` — understand what was last worked on and what is in progress.
+1. **Review recent git history** — `git log --oneline -10` — understand what was last worked on and what is in progress.
 2. **Read this file in full** — confirm you have the complete product context.
 3. **Confirm working directory** — `pwd` must return the root of this repository.
 4. **Confirm branch** — `git branch` — never work directly on `main`. Create a feature branch if one does not exist.
 5. **Run existing tests** — `npm test` — confirm nothing is broken before starting.
 6. **Do the work.**
-7. **Update the activity log** — append a timestamped entry to `ACTIVITY_LOG.md` describing what was done, what was changed, and what the next step is.
 
 Do not skip any step. Do not start coding before steps 1–5 are complete.
 
@@ -503,13 +502,3 @@ These terms have precise meanings in the Arco context. Use them correctly in cod
 
 Full Lexicon: `https://arcoventure.studio/lexicon`
 
----
-
-## Related Repositories
-
-| Repository | Role |
-|---|---|
-| `arcoventure/awesome-autonomous-business` | **Data source** — term Markdown files |
-| `arcoventure/arcoventure-marketing` | Marketing site — hosts /try page and /mcp docs |
-| `arcoventure/arcoventure-wiki` | Docusaurus wiki — source of wiki article URLs added to term sources |
-| `arcoventure/arcoventure-cms` | CMS — downstream of awesome-autonomous-business for editorial purposes |
