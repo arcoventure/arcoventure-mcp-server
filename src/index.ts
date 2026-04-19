@@ -12,6 +12,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 
 import { loadCache, getCache, getLastRefreshed, isCacheStale } from './cache/termCache'
 import { handleAdminRefresh } from './admin/refresh'
+import { buildServerCard } from './well-known/serverCard'
 import { lookupTerm } from './tools/lookupTerm'
 import { getRelatedTerms } from './tools/getRelatedTerms'
 import { verifyAlignment } from './tools/verifyAlignment'
@@ -111,6 +112,14 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const app = express()
 app.use(express.json())
+
+// Server Card — registered before MCP handler so it is never intercepted
+app.get('/.well-known/mcp/server-card.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json')
+  res.setHeader('Cache-Control', 'public, max-age=3600')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.status(200).json(buildServerCard())
+})
 
 // Rate limits
 app.use('/mcp', (req, _res, next) => {
