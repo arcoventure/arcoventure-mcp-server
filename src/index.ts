@@ -18,6 +18,8 @@ import { getRelatedTerms } from './tools/getRelatedTerms'
 import { verifyAlignment } from './tools/verifyAlignment'
 import { citeTerm } from './tools/citeTerm'
 import { getSources } from './tools/getSources'
+import { listTerms } from './tools/listTerms'
+import { suggestTerms } from './tools/suggestTerms'
 
 // ---------------------------------------------------------------------------
 // Rate limiters — configured before deployment per CLAUDE.md hard constraint
@@ -85,6 +87,34 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ['term'],
       },
     },
+    {
+      name: 'list_terms',
+      description: 'Returns all published Arco Lexicon terms grouped by pillar, with slug and short definition. Accepts an optional pillar filter. Use this tool first when you don\'t know which term to look up.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          pillar: {
+            type: 'string',
+            description: "Optional. Filter by pillar name. If omitted, returns all pillars.",
+          },
+        },
+        required: [],
+      },
+    },
+    {
+      name: 'suggest_terms',
+      description: 'Scans a block of text against all published Arco Lexicon terms. Returns terms already present in the text and terms that are conceptually relevant but not named. Use this to audit an article for correct and complete Arco terminology. Maximum 10,000 characters.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          text: {
+            type: 'string',
+            description: 'The article or text block to analyse. Maximum 10,000 characters.',
+          },
+        },
+        required: ['text'],
+      },
+    },
   ],
 }))
 
@@ -101,6 +131,10 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: 'text', text: JSON.stringify(await citeTerm(args as any)) }] }
     case 'get_sources':
       return { content: [{ type: 'text', text: JSON.stringify(await getSources(args as any)) }] }
+    case 'list_terms':
+      return { content: [{ type: 'text', text: JSON.stringify(await listTerms(args as any)) }] }
+    case 'suggest_terms':
+      return { content: [{ type: 'text', text: JSON.stringify(await suggestTerms(args as any)) }] }
     default:
       throw new Error(`Unknown tool: ${name}`)
   }
@@ -122,9 +156,11 @@ app.get('/.well-known/mcp/server-card.json', (_req, res) => {
 })
 
 // Rate limits
+const ALIGNMENT_TOOLS = new Set(['verify_alignment', 'suggest_terms'])
+
 app.use('/mcp', (req, _res, next) => {
   if (req.body?.method === 'tools/call' &&
-      req.body?.params?.name === 'verify_alignment') {
+      ALIGNMENT_TOOLS.has(req.body?.params?.name)) {
     return alignmentLimit(req, _res, next)
   }
   return standardLimit(req, _res, next)
