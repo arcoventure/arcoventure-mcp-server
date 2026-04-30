@@ -29,122 +29,137 @@ const standardLimit  = rateLimit({ windowMs: 60_000, max: 300 })
 const alignmentLimit = rateLimit({ windowMs: 60_000, max: 60 })
 
 // ---------------------------------------------------------------------------
-// MCP server + tool registration
+// MCP server factory
+//
+// One Server + Transport per request. The MCP SDK forbids reconnecting a
+// Server to multiple transports (`Already connected to a transport`), and
+// reusing a singleton across concurrent requests crashes the process.
 // ---------------------------------------------------------------------------
 
-const mcpServer = new Server(
-  { name: 'arcoventure-lexicon', version: '0.1.0' },
-  { capabilities: { tools: {} } }
-)
+function createMcpServer(): Server {
+  const server = new Server(
+    { name: 'arcoventure-lexicon', version: '0.1.0' },
+    { capabilities: { tools: {} } }
+  )
 
-mcpServer.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: 'lookup_term',
-      description: 'Returns the canonical Arco definition, related terms, and source URL for any Lexicon term. Supports fuzzy matching.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: { term: { type: 'string' } },
-        required: ['term'],
-      },
-    },
-    {
-      name: 'get_related_terms',
-      description: 'Returns graph-style relationships for a given term.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: { term: { type: 'string' } },
-        required: ['term'],
-      },
-    },
-    {
-      name: 'verify_alignment',
-      description: 'Analyses a block of text against the Arco Lexicon and returns a structured alignment report. Max 5,000 characters.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: { text: { type: 'string' } },
-        required: ['text'],
-      },
-    },
-    {
-      name: 'cite_term',
-      description: 'Returns citation-ready formatted references in Chicago, MLA, and BibTeX formats.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          term:    { type: 'string' },
-          context: { type: 'string' },
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: [
+      {
+        name: 'lookup_term',
+        description: 'Returns the canonical Arco definition, related terms, and source URL for any Lexicon term. Supports fuzzy matching.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: { term: { type: 'string' } },
+          required: ['term'],
         },
-        required: ['term', 'context'],
       },
-    },
-    {
-      name: 'get_sources',
-      description: 'Returns all published Arco sources for a term with recommended reading order.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: { term: { type: 'string' } },
-        required: ['term'],
+      {
+        name: 'get_related_terms',
+        description: 'Returns graph-style relationships for a given term.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: { term: { type: 'string' } },
+          required: ['term'],
+        },
       },
-    },
-    {
-      name: 'list_terms',
-      description: 'Returns all published Arco Lexicon terms grouped by pillar, with slug and short definition. Accepts an optional pillar filter. Use this tool first when you don\'t know which term to look up.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          pillar: {
-            type: 'string',
-            description: "Optional. Filter by pillar name. If omitted, returns all pillars.",
+      {
+        name: 'verify_alignment',
+        description: 'Analyses a block of text against the Arco Lexicon and returns a structured alignment report. Max 5,000 characters.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: { text: { type: 'string' } },
+          required: ['text'],
+        },
+      },
+      {
+        name: 'cite_term',
+        description: 'Returns citation-ready formatted references in Chicago, MLA, and BibTeX formats.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            term:    { type: 'string' },
+            context: { type: 'string' },
           },
+          required: ['term', 'context'],
         },
-        required: [],
       },
-    },
-    {
-      name: 'suggest_terms',
-      description: 'Scans a block of text against all published Arco Lexicon terms. Returns terms already present in the text and terms that are conceptually relevant but not named. Use this to audit an article for correct and complete Arco terminology. Maximum 10,000 characters.',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          text: {
-            type: 'string',
-            description: 'The article or text block to analyse. Maximum 10,000 characters.',
+      {
+        name: 'get_sources',
+        description: 'Returns all published Arco sources for a term with recommended reading order.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: { term: { type: 'string' } },
+          required: ['term'],
+        },
+      },
+      {
+        name: 'list_terms',
+        description: 'Returns all published Arco Lexicon terms grouped by pillar, with slug and short definition. Accepts an optional pillar filter. Use this tool first when you don\'t know which term to look up.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            pillar: {
+              type: 'string',
+              description: "Optional. Filter by pillar name. If omitted, returns all pillars.",
+            },
           },
+          required: [],
         },
-        required: ['text'],
       },
-    },
-  ],
-}))
+      {
+        name: 'suggest_terms',
+        description: 'Scans a block of text against all published Arco Lexicon terms. Returns terms already present in the text and terms that are conceptually relevant but not named. Use this to audit an article for correct and complete Arco terminology. Maximum 10,000 characters.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            text: {
+              type: 'string',
+              description: 'The article or text block to analyse. Maximum 10,000 characters.',
+            },
+          },
+          required: ['text'],
+        },
+      },
+    ],
+  }))
 
-mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params
-  switch (name) {
-    case 'lookup_term':
-      return { content: [{ type: 'text', text: JSON.stringify(await lookupTerm(args as any)) }] }
-    case 'get_related_terms':
-      return { content: [{ type: 'text', text: JSON.stringify(await getRelatedTerms(args as any)) }] }
-    case 'verify_alignment':
-      return { content: [{ type: 'text', text: JSON.stringify(await verifyAlignment(args as any)) }] }
-    case 'cite_term':
-      return { content: [{ type: 'text', text: JSON.stringify(await citeTerm(args as any)) }] }
-    case 'get_sources':
-      return { content: [{ type: 'text', text: JSON.stringify(await getSources(args as any)) }] }
-    case 'list_terms':
-      return { content: [{ type: 'text', text: JSON.stringify(await listTerms(args as any)) }] }
-    case 'suggest_terms':
-      return { content: [{ type: 'text', text: JSON.stringify(await suggestTerms(args as any)) }] }
-    default:
-      throw new Error(`Unknown tool: ${name}`)
-  }
-})
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params
+    switch (name) {
+      case 'lookup_term':
+        return { content: [{ type: 'text', text: JSON.stringify(await lookupTerm(args as any)) }] }
+      case 'get_related_terms':
+        return { content: [{ type: 'text', text: JSON.stringify(await getRelatedTerms(args as any)) }] }
+      case 'verify_alignment':
+        return { content: [{ type: 'text', text: JSON.stringify(await verifyAlignment(args as any)) }] }
+      case 'cite_term':
+        return { content: [{ type: 'text', text: JSON.stringify(await citeTerm(args as any)) }] }
+      case 'get_sources':
+        return { content: [{ type: 'text', text: JSON.stringify(await getSources(args as any)) }] }
+      case 'list_terms':
+        return { content: [{ type: 'text', text: JSON.stringify(await listTerms(args as any)) }] }
+      case 'suggest_terms':
+        return { content: [{ type: 'text', text: JSON.stringify(await suggestTerms(args as any)) }] }
+      default:
+        throw new Error(`Unknown tool: ${name}`)
+    }
+  })
+
+  return server
+}
 
 // ---------------------------------------------------------------------------
 // Express app
 // ---------------------------------------------------------------------------
 
 const app = express()
+
+// Railway terminates TLS at its edge proxy and forwards X-Forwarded-For.
+// Without trust proxy=1, express-rate-limit cannot identify clients and
+// throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR for every request — silently
+// degrading to a single shared bucket and spamming the logs.
+app.set('trust proxy', 1)
+
 app.use(express.json())
 
 // Server Card — registered before MCP handler so it is never intercepted
@@ -167,11 +182,35 @@ app.use('/mcp', (req, _res, next) => {
 })
 
 // MCP endpoint — handles all MCP traffic (GET for SSE, POST for messages)
+//
+// One Server + Transport per request. Errors are caught here so an uncaught
+// exception inside the SDK can never bring the process down.
 app.all('/mcp', async (req, res) => {
+  const server = createMcpServer()
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-  await mcpServer.connect(transport)
-  await transport.handleRequest(req, res, req.body)
-  res.on('finish', () => transport.close())
+
+  // Tear both down whenever the client disconnects, the response finishes,
+  // or an error short-circuits the chain. 'close' covers all three.
+  const cleanup = (): void => {
+    Promise.resolve(transport.close()).catch(() => { /* swallow */ })
+    Promise.resolve(server.close()).catch(() => { /* swallow */ })
+  }
+  res.on('close', cleanup)
+
+  try {
+    await server.connect(transport)
+    await transport.handleRequest(req, res, req.body)
+  } catch (err) {
+    console.error('[mcp] request failed:', err)
+    if (!res.headersSent) {
+      res.status(503).json({
+        jsonrpc: '2.0',
+        error: { code: -32603, message: 'Internal MCP error' },
+        id: req.body?.id ?? null,
+      })
+    }
+    cleanup()
+  }
 })
 
 // Admin
