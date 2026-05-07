@@ -17,6 +17,8 @@ A remote MCP server that exposes [Arco Venture Studio's](https://arcoventure.stu
 | `verify_alignment` | Scores text against the Lexicon (deterministic, no LLM calls) | `text: string` (≤5,000 chars) | 60 req/min |
 | `cite_term` | Chicago, MLA, and BibTeX citations with live access dates | `term`, `context` | 300 req/min |
 | `get_sources` | All published Arco sources with recommended reading order | `term: string` | 300 req/min |
+| `list_terms` | Browse all Lexicon terms, optionally filtered by pillar | `pillar?: string` | 300 req/min |
+| `suggest_terms` | Detects Arco terms in text and suggests canonical names for matching concepts | `text: string` (≤10,000 chars) | 60 req/min |
 
 ---
 
@@ -186,6 +188,68 @@ Returns every published Arco source for a term — blog posts, Lexicon entries, 
 ```
 
 **Example prompt:** _"What should I read to understand the agentic core concept?"_
+
+---
+
+### `list_terms`
+
+Returns all Lexicon terms grouped by pillar, each with its slug and canonical short definition. Pass an optional `pillar` filter to narrow results to a single pillar.
+
+**Valid pillar values:** `How We Think` · `What We Observe` · `What We've Learned`
+
+```json
+// Input — all terms
+{}
+
+// Input — filtered
+{ "pillar": "How We Think" }
+
+// Output
+{
+  "total": 12,
+  "pillars": {
+    "How We Think": [
+      {
+        "slug": "autonomous-business",
+        "term": "Autonomous Business",
+        "short_def": "A business engineered from the ground up so core operations run without human intervention."
+      }
+    ],
+    "What We Observe": [ "..." ]
+  }
+}
+```
+
+**Example prompt:** _"List all Arco Lexicon terms in the 'How We Think' pillar."_
+
+---
+
+### `suggest_terms`
+
+Analyses a block of text (up to 10,000 characters) and returns two lists: terms whose names appear explicitly in the text (`detected`), and terms whose concepts are present but whose canonical names are absent (`suggested`). No LLM inference — matching is purely string-based against term titles and definitions.
+
+```json
+// Input
+{ "text": "We built a system where a single person oversees an AI stack that handles all customer ops without daily involvement." }
+
+// Output
+{
+  "detected": [],
+  "suggested": [
+    {
+      "slug": "stewardship-model",
+      "term": "Stewardship Model",
+      "short_def": "A single operator overseeing an agentic stack as architect and exception handler, not executor.",
+      "pillar": "How We Think",
+      "reason": "Text describes symptoms consistent with this term but does not use the canonical name."
+    }
+  ],
+  "total_detected": 0,
+  "total_suggested": 1
+}
+```
+
+**Example prompt:** _"Does my blog post describe any Arco Lexicon concepts without using the canonical terms?"_
 
 ---
 
