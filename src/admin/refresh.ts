@@ -6,6 +6,7 @@
  * Called by the GitHub Action in awesome-autonomous-business on every push to terms/*.md.
  */
 
+import { timingSafeEqual } from 'crypto'
 import { Request, Response } from 'express'
 import { clearCache, loadCache } from '../cache/termCache'
 
@@ -20,7 +21,10 @@ export async function handleAdminRefresh(req: Request, res: Response): Promise<v
   const authHeader = req.headers['authorization'] ?? ''
   const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
 
-  if (!token || provided !== token) {
+  const tokenMatch = token && provided.length === token.length &&
+    timingSafeEqual(Buffer.from(provided), Buffer.from(token))
+
+  if (!tokenMatch) {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
