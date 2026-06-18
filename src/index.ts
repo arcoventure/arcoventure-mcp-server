@@ -10,6 +10,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 
+import { SERVER_VERSION } from './version'
 import { loadCache, getCache, getLastRefreshed, isCacheStale } from './cache/termCache'
 import { handleAdminRefresh } from './admin/refresh'
 import { buildServerCard } from './well-known/serverCard'
@@ -38,7 +39,7 @@ const alignmentLimit = rateLimit({ windowMs: 60_000, max: 60 })
 
 function createMcpServer(): Server {
   const server = new Server(
-    { name: 'arcoventure-lexicon', version: '0.1.0' },
+    { name: 'arcoventure-lexicon', version: SERVER_VERSION },
     { capabilities: { tools: {} } }
   )
 

@@ -1,3 +1,5 @@
+import { SERVER_VERSION } from '../version'
+
 export function buildServerCard() {
   const transportUrl = process.env.MCP_ENDPOINT_URL ?? 'https://mcp.arcoventure.studio/mcp'
 
@@ -6,7 +8,7 @@ export function buildServerCard() {
     'name': 'io.arcoventure/lexicon-mcp-server',
     'title': 'Arco Lexicon MCP Server',
     'description': 'Exposes the Arco Lexicon as structured, queryable tools for AI assistants. Canonical terminology for autonomous business design — used by Claude, Perplexity, and other MCP-compatible agents.',
-    'version': '1.0.0',
+    'version': SERVER_VERSION,
     'websiteUrl': 'https://arcoventure.studio/lexicon/query',
     'repository': {
       'url': 'https://github.com/arcoventure/arcoventure-mcp-server',

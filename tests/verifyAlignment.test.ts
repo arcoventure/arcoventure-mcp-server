@@ -22,6 +22,22 @@ function isError(result: object): result is { error: string } {
   return 'error' in result
 }
 
+/**
+ * Assert the tool returned a success payload (not a structured error) and
+ * narrow the type so callers can assert on the result unconditionally.
+ *
+ * This replaces the previous `if (!isError(result)) { ... }` pattern, which
+ * silently passed with zero assertions whenever detection regressed to an
+ * error path (e.g. NO_TERMS_DETECTED).
+ */
+function expectSuccess<T extends object>(result: T): Exclude<T, { error: string }> {
+  expect(isError(result)).toBe(false)
+  if (isError(result)) {
+    throw new Error('Expected a successful result but got error: ' + JSON.stringify(result))
+  }
+  return result as Exclude<T, { error: string }>
+}
+
 /** Seed the in-memory cache with test TermObjects so scoring logic fires. */
 function seedCache(terms: TermObject[]): void {
   const cache = getCache()
@@ -108,6 +124,7 @@ describe('verifyAlignment — no terms detected', () => {
 
   test('NO_TERMS_DETECTED response includes hint', async () => {
     const result = await verifyAlignment({ text: 'Completely unrelated content about foxes.' })
+    expect(isError(result)).toBe(true)
     if (isError(result)) {
       expect((result as any).hint).toBeDefined()
     }
@@ -121,19 +138,15 @@ describe('verifyAlignment — no terms detected', () => {
 describe('verifyAlignment — term detection', () => {
   test('detects "autonomous business" in structural context', async () => {
     const text = 'We are building an autonomous business where the agentic core handles all operations without human intervention.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      const slugs = result.matched_terms.map(m => m.arco_equivalent.toLowerCase())
-      expect(slugs.some(s => s.includes('autonomous'))).toBe(true)
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const slugs = result.matched_terms.map(m => m.arco_equivalent.toLowerCase())
+    expect(slugs.some(s => s.includes('autonomous'))).toBe(true)
   })
 
   test('returns matched_terms array', async () => {
     const text = 'Our autonomous business uses a stewardship model to manage the agentic core.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      expect(Array.isArray(result.matched_terms)).toBe(true)
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    expect(Array.isArray(result.matched_terms)).toBe(true)
   })
 })
 
@@ -145,7 +158,9 @@ describe('verifyAlignment — co-occurrence check', () => {
   test('does not flag "automated" in a generic non-architectural sentence', async () => {
     const text = 'The automated sprinkler system waters the lawn at 6am.'
     const result = await verifyAlignment({ text })
-    // Should not produce ALIGNED/PARTIALLY_ALIGNED for generic automation
+    // Generic automation should not detect an Arco term at all, or if it does,
+    // it must not be ALIGNED. Either outcome is acceptable; the failure mode we
+    // guard against is a confident ALIGNED verdict on generic prose.
     if (!isError(result)) {
       const verdicts = result.matched_terms.map(m => m.verdict)
       expect(verdicts.every(v => v !== 'ALIGNED')).toBe(true)
@@ -160,30 +175,24 @@ describe('verifyAlignment — co-occurrence check', () => {
 describe('verifyAlignment — verdict thresholds', () => {
   test('overall_alignment_score is a number between 0 and 1', async () => {
     const text = 'Our autonomous business delegates operations to an agentic core.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      expect(result.overall_alignment_score).toBeGreaterThanOrEqual(0)
-      expect(result.overall_alignment_score).toBeLessThanOrEqual(1)
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    expect(result.overall_alignment_score).toBeGreaterThanOrEqual(0)
+    expect(result.overall_alignment_score).toBeLessThanOrEqual(1)
   })
 
   test('overall_verdict is one of the five canonical values', async () => {
     const text = 'Our autonomous business delegates operations to an agentic core.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      const valid = ['ALIGNED', 'PARTIALLY_ALIGNED', 'NEEDS_CLARIFICATION', 'MISALIGNED', 'NO_ARCO_TERMS_DETECTED']
-      expect(valid).toContain(result.overall_verdict)
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const valid = ['ALIGNED', 'PARTIALLY_ALIGNED', 'NEEDS_CLARIFICATION', 'MISALIGNED', 'NO_ARCO_TERMS_DETECTED']
+    expect(valid).toContain(result.overall_verdict)
   })
 
   test('per-term alignment_score is between 0 and 1', async () => {
     const text = 'Our autonomous business relies on an agentic core.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      for (const term of result.matched_terms) {
-        expect(term.alignment_score).toBeGreaterThanOrEqual(0)
-        expect(term.alignment_score).toBeLessThanOrEqual(1)
-      }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    for (const term of result.matched_terms) {
+      expect(term.alignment_score).toBeGreaterThanOrEqual(0)
+      expect(term.alignment_score).toBeLessThanOrEqual(1)
     }
   })
 })
@@ -198,10 +207,8 @@ describe('verifyAlignment — multi-term input', () => {
       'The autonomous business model reduces coordination tax by eliminating human-to-human handoffs.',
       'The stewardship model ensures a single operator can manage the entire agentic core.',
     ].join(' ')
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      expect(result.matched_terms.length).toBeGreaterThanOrEqual(1)
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    expect(result.matched_terms.length).toBeGreaterThanOrEqual(1)
   })
 })
 
@@ -212,10 +219,8 @@ describe('verifyAlignment — multi-term input', () => {
 describe('verifyAlignment — recommended_reading', () => {
   test('returns recommended_reading array', async () => {
     const text = 'Our autonomous business is designed around the stewardship model.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      expect(Array.isArray(result.recommended_reading)).toBe(true)
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    expect(Array.isArray(result.recommended_reading)).toBe(true)
   })
 })
 
@@ -239,35 +244,28 @@ describe('verifyAlignment — max-length input', () => {
 describe('verifyAlignment — ARCO_SPECIFIC tier scoring', () => {
   test('agentic context → ALIGNED (score 0.85)', async () => {
     const text = 'The autonomous business relies on an agentic core to execute operations.'
-    const result = await verifyAlignment({ text })
-    expect(isError(result)).toBe(false)
-    if (!isError(result)) {
-      const match = result.matched_terms.find(m => m.arco_equivalent === 'Autonomous Business')
-      expect(match).toBeDefined()
-      expect(match!.alignment_score).toBe(0.85)
-      expect(match!.verdict).toBe('ALIGNED')
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const match = result.matched_terms.find(m => m.arco_equivalent === 'Autonomous Business')
+    expect(match).toBeDefined()
+    expect(match!.alignment_score).toBe(0.85)
+    expect(match!.verdict).toBe('ALIGNED')
   })
 
   test('stewardship context → ALIGNED (score 0.85)', async () => {
     const text = 'The stewardship model gives a single operator control over delegation and orchestration.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      const match = result.matched_terms.find(m => m.arco_equivalent === 'Stewardship Model')
-      expect(match).toBeDefined()
-      expect(match!.alignment_score).toBe(0.85)
-      expect(match!.verdict).toBe('ALIGNED')
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const match = result.matched_terms.find(m => m.arco_equivalent === 'Stewardship Model')
+    expect(match).toBeDefined()
+    expect(match!.alignment_score).toBe(0.85)
+    expect(match!.verdict).toBe('ALIGNED')
   })
 
   test('coordination context → ALIGNED (score 0.85)', async () => {
     const text = 'Coordination tax grows when autonomous workflows require delegation across teams.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      const match = result.matched_terms.find(m => m.arco_equivalent === 'Coordination Tax')
-      expect(match).toBeDefined()
-      expect(match!.alignment_score).toBe(0.85)
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const match = result.matched_terms.find(m => m.arco_equivalent === 'Coordination Tax')
+    expect(match).toBeDefined()
+    expect(match!.alignment_score).toBe(0.85)
   })
 })
 
@@ -280,37 +278,31 @@ describe('verifyAlignment — STRONG_BUSINESS tier scoring', () => {
     // "workflow" and "operations" are STRONG_BUSINESS; "autonomous"/"business" are the term itself (excluded);
     // no ARCO_SPECIFIC words → businessHits = 2 → 0.75
     const text = 'The autonomous business optimises workflow and operations without human intervention.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      const match = result.matched_terms.find(m => m.arco_equivalent === 'Autonomous Business')
-      expect(match).toBeDefined()
-      expect(match!.alignment_score).toBe(0.75)
-      expect(match!.verdict).toBe('PARTIALLY_ALIGNED')
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const match = result.matched_terms.find(m => m.arco_equivalent === 'Autonomous Business')
+    expect(match).toBeDefined()
+    expect(match!.alignment_score).toBe(0.75)
+    expect(match!.verdict).toBe('PARTIALLY_ALIGNED')
   })
 
   test('one business signal → score 0.60 (PARTIALLY_ALIGNED)', async () => {
     // "company" is STRONG_BUSINESS; no ARCO_SPECIFIC, no second business word
     const text = 'An autonomous business is a company worth building.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      const match = result.matched_terms.find(m => m.arco_equivalent === 'Autonomous Business')
-      expect(match).toBeDefined()
-      expect(match!.alignment_score).toBe(0.60)
-      expect(match!.verdict).toBe('PARTIALLY_ALIGNED')
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const match = result.matched_terms.find(m => m.arco_equivalent === 'Autonomous Business')
+    expect(match).toBeDefined()
+    expect(match!.alignment_score).toBe(0.60)
+    expect(match!.verdict).toBe('PARTIALLY_ALIGNED')
   })
 
   test('no context → score 0.30 (NEEDS_CLARIFICATION)', async () => {
     // Isolated term, no surrounding vocabulary
     const text = 'Coordination tax.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      const match = result.matched_terms.find(m => m.arco_equivalent === 'Coordination Tax')
-      expect(match).toBeDefined()
-      expect(match!.alignment_score).toBe(0.30)
-      expect(match!.verdict).toBe('NEEDS_CLARIFICATION')
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const match = result.matched_terms.find(m => m.arco_equivalent === 'Coordination Tax')
+    expect(match).toBeDefined()
+    expect(match!.alignment_score).toBe(0.30)
+    expect(match!.verdict).toBe('NEEDS_CLARIFICATION')
   })
 })
 
@@ -328,23 +320,20 @@ describe('verifyAlignment — false positive prevention', () => {
     }
   })
 
-  test('suggested_reframe present for MISALIGNED/NEEDS_CLARIFICATION', async () => {
+  test('suggested_reframe present for NEEDS_CLARIFICATION', async () => {
     const text = 'Coordination tax.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      const match = result.matched_terms.find(m => m.verdict === 'NEEDS_CLARIFICATION')
-      if (match) expect(match.suggested_reframe).toBeDefined()
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const match = result.matched_terms.find(m => m.verdict === 'NEEDS_CLARIFICATION')
+    expect(match).toBeDefined()
+    expect(match!.suggested_reframe).toBeDefined()
   })
 
   test('no suggested_reframe for ALIGNED terms', async () => {
     const text = 'The autonomous business relies on an agentic operator.'
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      const aligned = result.matched_terms.filter(m => m.verdict === 'ALIGNED')
-      for (const match of aligned) {
-        expect(match.suggested_reframe).toBeUndefined()
-      }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const aligned = result.matched_terms.filter(m => m.verdict === 'ALIGNED')
+    for (const match of aligned) {
+      expect(match.suggested_reframe).toBeUndefined()
     }
   })
 })
@@ -360,11 +349,9 @@ describe('verifyAlignment — multi-term overall scoring', () => {
       'The autonomous business delegates operations to an agentic core.',
       'The coordination tax is reduced by the stewardship model and operator delegation.',
     ].join(' ')
-    const result = await verifyAlignment({ text })
-    if (!isError(result)) {
-      expect(result.matched_terms.length).toBeGreaterThanOrEqual(2)
-      expect(result.overall_alignment_score).toBeGreaterThanOrEqual(0.75)
-      expect(result.overall_verdict).toBe('ALIGNED')
-    }
+    const result = expectSuccess(await verifyAlignment({ text }))
+    expect(result.matched_terms.length).toBeGreaterThanOrEqual(2)
+    expect(result.overall_alignment_score).toBeGreaterThanOrEqual(0.75)
+    expect(result.overall_verdict).toBe('ALIGNED')
   })
 })

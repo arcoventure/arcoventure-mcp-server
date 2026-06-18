@@ -275,7 +275,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 }
 ```
 
-Save the file and restart Claude Desktop. The five Arco Lexicon tools will appear in the tool list.
+Save the file and restart Claude Desktop. The seven Arco Lexicon tools will appear in the tool list.
 
 ### Cursor
 

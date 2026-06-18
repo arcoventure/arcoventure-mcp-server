@@ -73,6 +73,10 @@ web_modules/
 # Internal session notes
 ACTIVITY_LOG.md
 
+# Claude Code worktrees and local agent state
+.claude/
+.claire/
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
