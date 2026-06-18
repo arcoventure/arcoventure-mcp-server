@@ -4,8 +4,41 @@
  */
 
 import { TermObject } from '../types'
+import { getCacheVersion } from '../cache/termCache'
+import { normalise } from './normalise'
+
+// Re-exported so existing importers (resolveTerm, verifyAlignment) keep a single
+// normalise source without each having to know where it now lives.
+export { normalise }
 
 const MAX_DISTANCE = 2
+
+// Precomputed normalised candidates per term, rebuilt only when the cache
+// changes (version bump) or its size differs from what we indexed — so the
+// hot verify_alignment path does not re-normalise every term on every n-gram.
+interface IndexEntry {
+  term:  TermObject
+  slug:  string
+  title: string
+}
+let indexEntries: IndexEntry[] = []
+let indexedVersion = -1
+let indexedSize = -1
+
+function getIndex(cache: Map<string, TermObject>): IndexEntry[] {
+  const version = getCacheVersion()
+  if (version === indexedVersion && cache.size === indexedSize) {
+    return indexEntries
+  }
+  indexEntries = [...cache.values()].map((term) => ({
+    term,
+    slug:  normalise(term.slug).replace(/-/g, ' '),
+    title: normalise(term.title),
+  }))
+  indexedVersion = version
+  indexedSize = cache.size
+  return indexEntries
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -39,19 +72,15 @@ export function levenshtein(a: string, b: string): number {
 }
 
 /**
- * Normalises a string for comparison: lowercase, trim, collapse whitespace.
- */
-export function normalise(input: string): string {
-  return input.toLowerCase().trim().replace(/\s+/g, ' ')
-}
-
-/**
  * Searches the cache for the best matching TermObject given a raw input string.
  * Checks against slug and normalised title. Returns the closest match at
  * Levenshtein distance ≤ 2, or null if no match is found.
  *
  * Short inputs (≤ 4 characters) are only matched on exact slug/title equality
  * to prevent generic words from matching multi-word terms.
+ *
+ * Reads from a precomputed normalised index and returns early on an exact
+ * match, so it avoids re-normalising the whole cache on every call.
  *
  * @param input - raw user-provided term string
  * @param cache - the full in-memory term cache
@@ -72,25 +101,20 @@ export function fuzzyFindTerm(
   let bestMatch: TermObject | null = null
   let bestDistance = MAX_DISTANCE + 1
 
-  for (const term of cache.values()) {
-    const candidates = [
-      normalise(term.slug).replace(/-/g, ' '),
-      normalise(term.title),
-    ]
+  for (const entry of getIndex(cache)) {
+    const candidates = [entry.slug, entry.title]
 
     for (const candidate of candidates) {
-      if (shortInput) {
-        // Exact match only for short inputs
-        if (normInputSpaced === candidate || normInput === normalise(term.slug)) {
-          return term
-        }
-        continue
+      // Exact match — return immediately; no point scanning the rest.
+      if (normInputSpaced === candidate || normInput === entry.slug) {
+        return entry.term
       }
+      if (shortInput) continue
 
       const dist = levenshtein(normInputSpaced, candidate)
       if (dist < bestDistance) {
         bestDistance = dist
-        bestMatch = term
+        bestMatch = entry.term
       }
     }
   }

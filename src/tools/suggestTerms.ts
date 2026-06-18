@@ -1,5 +1,11 @@
 import { getCache, isCacheUnavailable } from '../cache/termCache'
+import { normalise as normaliseShared } from '../lib/normalise'
 import { usageLog } from '../lib/usageLog'
+
+/** suggest_terms matches on phrase containment, so it strips punctuation. */
+function normalise(s: string): string {
+  return normaliseShared(s, { stripPunctuation: true })
+}
 
 const MAX_INPUT = 10_000
 
@@ -93,10 +99,6 @@ export async function suggestTerms(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function normalise(s: string): string {
-  return s.toLowerCase().replace(/-/g, ' ').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
-}
 
 /**
  * Returns true if every word of the term title appears as a contiguous

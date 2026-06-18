@@ -8,10 +8,11 @@
  * STRONG_BUSINESS words are weaker business/AI signals.
  *
  * Score tiers:
- *   ARCO_SPECIFIC hit             → 0.85 (ALIGNED)
- *   STRONG_BUSINESS ≥ 2 hits      → 0.75 (PARTIALLY_ALIGNED)
- *   STRONG_BUSINESS 1 hit         → 0.60 (PARTIALLY_ALIGNED)
- *   no context hits               → 0.30 (NEEDS_CLARIFICATION)
+ *   ARCO_SPECIFIC hit                       → 0.85 (ALIGNED)
+ *   STRONG_BUSINESS ≥ 2 hits                → 0.75 (PARTIALLY_ALIGNED)
+ *   STRONG_BUSINESS 1 hit                   → 0.60 (PARTIALLY_ALIGNED)
+ *   no context hits                         → 0.30 (NEEDS_CLARIFICATION)
+ *   anti-pattern (clearly non-architectural) → 0.15 (MISALIGNED)
  */
 
 import { AlignmentResult } from '../types'
@@ -34,6 +35,15 @@ const STRONG_BUSINESS = new Set([
   'revenue', 'operations', 'workflow', 'handoff', 'infrastructure',
   'stack', 'platform', 'architecture', 'enterprise', 'automate',
   'automated', 'automation', 'orchestration',
+])
+
+// Clearly non-architectural / physical-world vocabulary. When a term appears
+// surrounded by these (and no Arco or business signal), the usage contradicts
+// the Lexicon meaning — a MISALIGNED verdict rather than mere ambiguity.
+const ANTI_PATTERN = new Set([
+  'lawn', 'sprinkler', 'garden', 'kitchen', 'coffee', 'car', 'vehicle',
+  'thermostat', 'household', 'dishwasher', 'factory', 'machinery', 'doorbell',
+  'grocery', 'laundry', 'oven', 'mug', 'mugs', 'plumbing', 'fridge', 'toaster',
 ])
 
 export interface VerifyAlignmentInput {
@@ -151,16 +161,19 @@ function scoreMatch(term: TermObject, sentence: string): number {
 
   let arcoHits = 0
   let businessHits = 0
+  let antiHits = 0
 
   for (const token of tokens) {
     if (termWords.has(token)) continue   // skip the term's own words
-    if (ARCO_SPECIFIC.has(token))   arcoHits++
+    if (ARCO_SPECIFIC.has(token))        arcoHits++
     else if (STRONG_BUSINESS.has(token)) businessHits++
+    else if (ANTI_PATTERN.has(token))    antiHits++
   }
 
   if (arcoHits >= 1)        return 0.85  // ALIGNED — Arco-specific language present
   if (businessHits >= 2)    return 0.75  // PARTIALLY_ALIGNED — multiple business signals
   if (businessHits === 1)   return 0.60  // PARTIALLY_ALIGNED — weak business signal
+  if (antiHits >= 1)        return 0.15  // MISALIGNED — clearly non-architectural context
   return 0.30                            // NEEDS_CLARIFICATION — no architectural context
 }
 
@@ -194,16 +207,21 @@ function buildRecommendedReading(
   cache: Map<string, TermObject>
 ): Array<{ title: string; url: string; relevance: 'CRITICAL' | 'HIGH' | 'SUPPORTING' }> {
   const reading: Array<{ title: string; url: string; relevance: 'CRITICAL' | 'HIGH' | 'SUPPORTING' }> = []
+  const wanted = new Set(termTitles)
 
   for (const [slug, term] of cache.entries()) {
-    if (!termTitles.includes(term.title)) continue
+    if (!wanted.has(term.title)) continue
+
+    // Track per-term contribution so a term with no CRITICAL/HIGH sources still
+    // gets its lexicon fallback, regardless of what earlier terms contributed.
+    const before = reading.length
     for (const source of term.sources) {
       if (source.relevance === 'CRITICAL' || source.relevance === 'HIGH') {
         reading.push({ title: source.title, url: source.url, relevance: source.relevance })
       }
     }
-    if (reading.length === 0) {
-      // Fallback: include the lexicon entry itself
+    if (reading.length === before) {
+      // Fallback: include the lexicon entry itself for this term
       reading.push({
         title:     term.title,
         url:       `https://arcoventure.studio/lexicon/${slug}`,

@@ -13,7 +13,17 @@ const cache: Map<string, TermObject> = new Map()
 let lastRefreshed: Date | null = null
 let loading = false
 let inflightLoad: Promise<LoadResult> | null = null
+let cacheVersion = 0
 const TTL_HOURS = 24
+
+/**
+ * Monotonic counter bumped on every cache mutation (successful load or clear).
+ * Consumers that derive a precomputed index from the cache (e.g. fuzzyMatch)
+ * use it to know when to rebuild.
+ */
+export function getCacheVersion(): number {
+  return cacheVersion
+}
 
 /**
  * Returns true only while a loadCache() call is in progress.
@@ -100,6 +110,7 @@ async function doLoadCache(): Promise<LoadResult> {
     for (const [slug, term] of next) {
       cache.set(slug, term)
     }
+    cacheVersion++
 
     lastRefreshed = new Date()
     return { termsLoaded: cache.size, durationMs: Date.now() - start }
@@ -129,6 +140,7 @@ export function getCachedTerm(slug: string): TermObject | undefined {
 export function clearCache(): void {
   cache.clear()
   lastRefreshed = null
+  cacheVersion++
 }
 
 /**

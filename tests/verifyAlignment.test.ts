@@ -342,6 +342,42 @@ describe('verifyAlignment — false positive prevention', () => {
 // Phase 2: multi-term + overall scoring
 // ---------------------------------------------------------------------------
 
+describe('verifyAlignment — MISALIGNED tier (anti-pattern context)', () => {
+  test('term in a clearly non-architectural context → MISALIGNED (score 0.15)', async () => {
+    const text = 'The autonomous business waters the lawn with a sprinkler near the coffee machine.'
+    const result = expectSuccess(await verifyAlignment({ text }))
+    const match = result.matched_terms.find(m => m.arco_equivalent === 'Autonomous Business')
+    expect(match).toBeDefined()
+    expect(match!.alignment_score).toBe(0.15)
+    expect(match!.verdict).toBe('MISALIGNED')
+    expect(match!.suggested_reframe).toBeDefined()
+  })
+
+  test('overall_verdict can be MISALIGNED', async () => {
+    const text = 'The autonomous business waters the lawn and brews coffee in the kitchen.'
+    const result = expectSuccess(await verifyAlignment({ text }))
+    expect(result.overall_verdict).toBe('MISALIGNED')
+  })
+})
+
+describe('verifyAlignment — recommended_reading per-term fallback', () => {
+  test('every matched term without sources still gets a lexicon fallback entry', async () => {
+    // TEST_TERMS have no sources, so each matched term must contribute its own
+    // fallback — not just the first one.
+    const text = [
+      'The autonomous business delegates operations to an agentic core.',
+      'The coordination tax is reduced by operator delegation and orchestration.',
+    ].join(' ')
+    const result = expectSuccess(await verifyAlignment({ text }))
+    expect(result.matched_terms.length).toBeGreaterThanOrEqual(2)
+
+    const titles = result.recommended_reading.map(r => r.title)
+    expect(titles).toContain('Autonomous Business')
+    expect(titles).toContain('Coordination Tax')
+    expect(result.recommended_reading.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
 describe('verifyAlignment — multi-term overall scoring', () => {
   test('multi-term input produces correct overall score (average)', async () => {
     // Both terms should hit ARCO_SPECIFIC context → both 0.85 → overall 0.85

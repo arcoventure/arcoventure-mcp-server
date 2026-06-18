@@ -42,6 +42,8 @@ export async function citeTerm(input: CiteTermInput): Promise<CiteTermOutput | C
   const { term } = resolved
   void usageLog({ tool: 'cite_term', term_slug: term.slug })
 
+  const context = input.context?.trim()
+
   // Access date injected at call time — never hardcoded
   const now        = new Date()
   const isoDate    = now.toISOString().split('T')[0]             // YYYY-MM-DD
@@ -74,7 +76,9 @@ export async function citeTerm(input: CiteTermInput): Promise<CiteTermOutput | C
     term:          term.title,
     canonical_url: url,
     accessed_date: isoDate,
-    usage_note:    `Cite this entry when referencing "${term.title}" in research, journalism, or investor materials. The canonical URL is the authoritative source.`,
+    usage_note:    context
+      ? `When using "${term.title}" in the context of ${context}, cite this entry so the canonical definition is the authoritative source. Use the format matching your publication.`
+      : `Cite this entry when referencing "${term.title}" in research, journalism, or investor materials. The canonical URL is the authoritative source.`,
     citation_formats: { chicago, mla, bibtex },
     related_citable_terms,
   }
