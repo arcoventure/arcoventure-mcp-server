@@ -12,7 +12,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 
 import { SERVER_VERSION } from './version'
 import { validateEnv, allowedOrigins, allowedHosts, isLocalOrigin } from './config'
-import { loadCache, getCache, getLastRefreshed, isCacheStale } from './cache/termCache'
+import { loadCache, getCache, isCacheStale } from './cache/termCache'
+import { buildHealth } from './health'
 import { handleAdminRefresh } from './admin/refresh'
 import { buildServerCard } from './well-known/serverCard'
 import { publicToolList, TOOL_BY_NAME, validateToolArgs } from './tools/registry'
@@ -180,27 +181,10 @@ app.all('/mcp', async (req, res) => {
 // Admin
 app.post('/admin/refresh', adminLimit, handleAdminRefresh)
 
-// Health
+// Health — 503 until the cache is ready so uptime checks see a degraded server.
 app.get('/health', (_req, res) => {
-  const lastRefreshed = getLastRefreshed()
-  const termCount     = getCache().size
-  const uptimeSeconds = Math.floor(process.uptime())
-
-  let ttlRemainingHours: number | null = null
-  if (lastRefreshed) {
-    const ageMs = Date.now() - lastRefreshed.getTime()
-    ttlRemainingHours = Math.max(0, Math.round((24 * 3600_000 - ageMs) / 3600_000 * 10) / 10)
-  }
-
-  res.json({
-    status: 'ok',
-    cache: {
-      term_count:          termCount,
-      last_refreshed:      lastRefreshed?.toISOString() ?? null,
-      ttl_remaining_hours: ttlRemainingHours,
-    },
-    uptime_seconds: uptimeSeconds,
-  })
+  const { httpStatus, body } = buildHealth()
+  res.status(httpStatus).json(body)
 })
 
 // ---------------------------------------------------------------------------
