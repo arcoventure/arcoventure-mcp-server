@@ -21,11 +21,17 @@ import { publicToolList, TOOL_BY_NAME, validateToolArgs } from './tools/registry
 // Rate limiters — configured before deployment per CLAUDE.md hard constraint
 // ---------------------------------------------------------------------------
 
-const standardLimit  = rateLimit({ windowMs: 60_000, max: 300 })
-const alignmentLimit = rateLimit({ windowMs: 60_000, max: 60 })
+// Emit the structured 429 shape documented in CLAUDE.md instead of
+// express-rate-limit's default plaintext body.
+function rateLimitHandler(_req: express.Request, res: express.Response): void {
+  res.status(429).json({ error: 'RATE_LIMIT_EXCEEDED', retry_after: 60 })
+}
+
+const standardLimit  = rateLimit({ windowMs: 60_000, max: 300, handler: rateLimitHandler })
+const alignmentLimit = rateLimit({ windowMs: 60_000, max: 60, handler: rateLimitHandler })
 // Admin refresh is token-protected but otherwise unauthenticated traffic can
 // brute-force the token or spam reloads; cap it tightly.
-const adminLimit     = rateLimit({ windowMs: 60_000, max: 5 })
+const adminLimit     = rateLimit({ windowMs: 60_000, max: 5, handler: rateLimitHandler })
 
 // ---------------------------------------------------------------------------
 // MCP server factory

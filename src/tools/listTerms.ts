@@ -18,6 +18,9 @@ export interface ListTermsOutput {
 
 export type ListTermsError =
   | { error: 'CACHE_UNAVAILABLE'; message: string }
+  | { error: 'INVALID_PILLAR'; message: string; valid_pillars: string[] }
+
+const VALID_PILLARS = ['How We Think', 'What We Observe', "What We've Learned"]
 
 export async function listTerms(
   input: ListTermsInput
@@ -28,6 +31,14 @@ export async function listTerms(
 
   const cache  = getCache()
   const pillar = input.pillar?.trim() || undefined
+
+  if (pillar && !VALID_PILLARS.includes(pillar)) {
+    return {
+      error: 'INVALID_PILLAR',
+      message: `Unknown pillar: '${pillar}'.`,
+      valid_pillars: VALID_PILLARS,
+    }
+  }
 
   const grouped: Record<string, TermSummary[]> = {}
 
