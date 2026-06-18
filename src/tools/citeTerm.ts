@@ -3,8 +3,7 @@
  * and BibTeX formats. Access dates are injected dynamically at call time.
  */
 
-import { getCache, isCacheUnavailable } from '../cache/termCache'
-import { fuzzyFindTerm } from '../lib/fuzzyMatch'
+import { resolveTerm, isResolveError } from '../lib/resolveTerm'
 import { usageLog } from '../lib/usageLog'
 
 export interface CiteTermInput {
@@ -33,24 +32,14 @@ export type CiteTermError =
   | { error: 'CACHE_UNAVAILABLE'; message: string }
 
 export async function citeTerm(input: CiteTermInput): Promise<CiteTermOutput | CiteTermError> {
-  const cache = getCache()
+  const resolved = resolveTerm(input.term)
 
-  if (isCacheUnavailable()) {
-    return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
+  if (isResolveError(resolved)) {
+    if (resolved.error === 'TERM_NOT_FOUND') void usageLog({ tool: 'cite_term' })
+    return resolved
   }
 
-  const term = fuzzyFindTerm(input.term, cache)
-
-  if (!term) {
-    const suggestions = [...cache.values()].slice(0, 3).map(t => t.title)
-    void usageLog({ tool: 'cite_term' })
-    return {
-      error: 'TERM_NOT_FOUND',
-      message: `No Lexicon entry found for: '${input.term}'`,
-      suggestions,
-    }
-  }
-
+  const { term } = resolved
   void usageLog({ tool: 'cite_term', term_slug: term.slug })
 
   // Access date injected at call time — never hardcoded

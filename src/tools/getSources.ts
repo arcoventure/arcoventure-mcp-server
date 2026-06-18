@@ -5,8 +5,7 @@
  */
 
 import { Source } from '../types'
-import { getCache, isCacheUnavailable } from '../cache/termCache'
-import { fuzzyFindTerm } from '../lib/fuzzyMatch'
+import { resolveTerm, isResolveError } from '../lib/resolveTerm'
 import { usageLog } from '../lib/usageLog'
 
 export interface GetSourcesInput {
@@ -29,24 +28,14 @@ const REPO  = process.env.GITHUB_REPO_NAME  ?? 'awesome-autonomous-business'
 const PATH  = process.env.GITHUB_TERMS_PATH ?? 'terms'
 
 export async function getSources(input: GetSourcesInput): Promise<GetSourcesOutput | GetSourcesError> {
-  const cache = getCache()
+  const resolved = resolveTerm(input.term)
 
-  if (isCacheUnavailable()) {
-    return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
+  if (isResolveError(resolved)) {
+    if (resolved.error === 'TERM_NOT_FOUND') void usageLog({ tool: 'get_sources' })
+    return resolved
   }
 
-  const term = fuzzyFindTerm(input.term, cache)
-
-  if (!term) {
-    const suggestions = [...cache.values()].slice(0, 3).map(t => t.title)
-    void usageLog({ tool: 'get_sources' })
-    return {
-      error: 'TERM_NOT_FOUND',
-      message: `No Lexicon entry found for: '${input.term}'`,
-      suggestions,
-    }
-  }
-
+  const { term } = resolved
   void usageLog({ tool: 'get_sources', term_slug: term.slug })
 
   let sources = term.sources

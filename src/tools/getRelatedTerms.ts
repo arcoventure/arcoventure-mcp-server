@@ -2,8 +2,7 @@
  * get_related_terms — returns graph-style relationships for a given term.
  */
 
-import { getCache, isCacheUnavailable } from '../cache/termCache'
-import { fuzzyFindTerm } from '../lib/fuzzyMatch'
+import { resolveTerm, isResolveError } from '../lib/resolveTerm'
 import { usageLog } from '../lib/usageLog'
 
 export interface GetRelatedTermsInput {
@@ -29,24 +28,14 @@ export type GetRelatedTermsError =
 export async function getRelatedTerms(
   input: GetRelatedTermsInput
 ): Promise<GetRelatedTermsOutput | GetRelatedTermsError> {
-  const cache = getCache()
+  const resolved = resolveTerm(input.term)
 
-  if (isCacheUnavailable()) {
-    return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
+  if (isResolveError(resolved)) {
+    if (resolved.error === 'TERM_NOT_FOUND') void usageLog({ tool: 'get_related_terms' })
+    return resolved
   }
 
-  const term = fuzzyFindTerm(input.term, cache)
-
-  if (!term) {
-    const suggestions = [...cache.values()].slice(0, 3).map(t => t.title)
-    void usageLog({ tool: 'get_related_terms' })
-    return {
-      error: 'TERM_NOT_FOUND',
-      message: `No Lexicon entry found for: '${input.term}'`,
-      suggestions,
-    }
-  }
-
+  const { term } = resolved
   void usageLog({ tool: 'get_related_terms', term_slug: term.slug })
 
   return {

@@ -1,4 +1,5 @@
 import { SERVER_VERSION } from '../version'
+import { publicToolList } from '../tools/registry'
 
 export function buildServerCard() {
   const transportUrl = process.env.MCP_ENDPOINT_URL ?? 'https://mcp.arcoventure.studio/mcp'
@@ -14,7 +15,7 @@ export function buildServerCard() {
       'url': 'https://github.com/arcoventure/arcoventure-mcp-server',
       'source': 'github',
     },
-    'supportedProtocolVersions': ['2025-03-12', '2025-06-18'],
+    'supportedProtocolVersions': ['2025-03-26', '2025-06-18'],
     'remotes': [
       {
         'transportType': 'streamable-http',
@@ -24,63 +25,8 @@ export function buildServerCard() {
     'capabilities': {
       'tools': {},
     },
-    'tools': [
-      {
-        'name': 'lookup_term',
-        'description': 'Returns the canonical Arco definition, related terms, and source URL for any Lexicon term. Supports fuzzy matching.',
-        'inputSchema': {
-          'type': 'object',
-          'properties': {
-            'term': { 'type': 'string', 'description': 'Term name or slug to look up' },
-          },
-          'required': ['term'],
-        },
-      },
-      {
-        'name': 'get_related_terms',
-        'description': 'Returns graph-style relationships for a given term — which terms it connects to and the nature of each relationship.',
-        'inputSchema': {
-          'type': 'object',
-          'properties': {
-            'term': { 'type': 'string', 'description': 'Term name or slug' },
-          },
-          'required': ['term'],
-        },
-      },
-      {
-        'name': 'verify_alignment',
-        'description': 'Analyses a block of text against the Arco Lexicon and returns a structured alignment report per detected term — verdict, explanation, and recommended reading.',
-        'inputSchema': {
-          'type': 'object',
-          'properties': {
-            'text': { 'type': 'string', 'description': 'Text to verify against Arco terminology (max 5,000 characters)' },
-          },
-          'required': ['text'],
-        },
-      },
-      {
-        'name': 'cite_term',
-        'description': 'Returns citation-ready formatted references for a Lexicon term in Chicago, MLA, and BibTeX formats with usage guidance.',
-        'inputSchema': {
-          'type': 'object',
-          'properties': {
-            'term': { 'type': 'string', 'description': 'Term name or slug to cite' },
-            'context': { 'type': 'string', 'description': 'Brief description of how the term is being used' },
-          },
-          'required': ['term', 'context'],
-        },
-      },
-      {
-        'name': 'get_sources',
-        'description': 'Returns all published Arco sources for a term across all content types with recommended reading order.',
-        'inputSchema': {
-          'type': 'object',
-          'properties': {
-            'term': { 'type': 'string', 'description': 'Term name or slug' },
-          },
-          'required': ['term'],
-        },
-      },
-    ],
+    // Derived from the single tool registry so the card never drifts from the
+    // tools the server actually serves.
+    'tools': publicToolList(),
   }
 }
