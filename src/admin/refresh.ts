@@ -37,7 +37,9 @@ export async function handleAdminRefresh(req: Request, res: Response): Promise<v
     const body: RefreshResponse = { status: 'ok', terms_loaded: termsLoaded, duration_ms: durationMs }
     res.json(body)
   } catch (err) {
+    // Log the detail server-side; return a generic message so GitHub API
+    // bodies or internal paths are never echoed to the client.
     console.error('[admin/refresh] Cache reload failed:', err)
-    res.status(500).json({ error: 'Cache reload failed', message: String(err) })
+    res.status(500).json({ error: 'Cache reload failed' })
   }
 }

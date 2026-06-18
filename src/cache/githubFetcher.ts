@@ -18,6 +18,28 @@ const GITHUB_API_BASE = 'https://api.github.com'
 // loading state forever).
 const FETCH_TIMEOUT_MS = 10_000
 
+// download_url comes from the GitHub API response. Restrict outbound fetches to
+// known GitHub hosts so a compromised/MITM'd response cannot turn this into an
+// SSRF primitive pointing at arbitrary internal services.
+const ALLOWED_FETCH_HOSTS = new Set([
+  'raw.githubusercontent.com',
+  'api.github.com',
+  'github.com',
+])
+
+function assertAllowedUrl(rawUrl: string): URL {
+  let url: URL
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    throw new Error(`Invalid download URL: ${rawUrl}`)
+  }
+  if (url.protocol !== 'https:' || !ALLOWED_FETCH_HOSTS.has(url.hostname)) {
+    throw new Error(`Blocked non-GitHub fetch: ${url.protocol}//${url.hostname}`)
+  }
+  return url
+}
+
 function headers(): Record<string, string> {
   const h: Record<string, string> = {
     'Accept':     'application/vnd.github+json',
@@ -58,7 +80,8 @@ export async function fetchTermFileList(): Promise<GitHubFile[]> {
  * Fetches the raw Markdown content for a single term file.
  */
 export async function fetchTermFileContent(downloadUrl: string): Promise<string> {
-  const res = await fetch(downloadUrl, { headers: headers(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+  const url = assertAllowedUrl(downloadUrl)
+  const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
 
   if (!res.ok) {
     throw new Error(`GitHub API error ${res.status} fetching ${downloadUrl}: ${await res.text()}`)
