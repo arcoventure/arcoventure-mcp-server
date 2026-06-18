@@ -2,7 +2,7 @@
  * get_related_terms — returns graph-style relationships for a given term.
  */
 
-import { getCache, isCacheLoading } from '../cache/termCache'
+import { getCache, isCacheUnavailable } from '../cache/termCache'
 import { fuzzyFindTerm } from '../lib/fuzzyMatch'
 import { usageLog } from '../lib/usageLog'
 
@@ -31,7 +31,7 @@ export async function getRelatedTerms(
 ): Promise<GetRelatedTermsOutput | GetRelatedTermsError> {
   const cache = getCache()
 
-  if (isCacheLoading()) {
+  if (isCacheUnavailable()) {
     return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
   }
 

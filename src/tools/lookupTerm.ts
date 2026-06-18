@@ -3,7 +3,7 @@
  * source URL for a given Lexicon term. Supports fuzzy matching.
  */
 
-import { getCache, isCacheLoading } from '../cache/termCache'
+import { getCache, isCacheUnavailable } from '../cache/termCache'
 import { fuzzyFindTerm } from '../lib/fuzzyMatch'
 import { usageLog } from '../lib/usageLog'
 
@@ -36,7 +36,7 @@ export type LookupTermError =
 export async function lookupTerm(input: LookupTermInput): Promise<LookupTermOutput | LookupTermError> {
   const cache = getCache()
 
-  if (isCacheLoading()) {
+  if (isCacheUnavailable()) {
     return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
   }
 

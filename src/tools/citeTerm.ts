@@ -3,7 +3,7 @@
  * and BibTeX formats. Access dates are injected dynamically at call time.
  */
 
-import { getCache, isCacheLoading } from '../cache/termCache'
+import { getCache, isCacheUnavailable } from '../cache/termCache'
 import { fuzzyFindTerm } from '../lib/fuzzyMatch'
 import { usageLog } from '../lib/usageLog'
 
@@ -35,7 +35,7 @@ export type CiteTermError =
 export async function citeTerm(input: CiteTermInput): Promise<CiteTermOutput | CiteTermError> {
   const cache = getCache()
 
-  if (isCacheLoading()) {
+  if (isCacheUnavailable()) {
     return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
   }
 

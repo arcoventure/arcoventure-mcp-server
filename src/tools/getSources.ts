@@ -5,7 +5,7 @@
  */
 
 import { Source } from '../types'
-import { getCache, isCacheLoading } from '../cache/termCache'
+import { getCache, isCacheUnavailable } from '../cache/termCache'
 import { fuzzyFindTerm } from '../lib/fuzzyMatch'
 import { usageLog } from '../lib/usageLog'
 
@@ -31,7 +31,7 @@ const PATH  = process.env.GITHUB_TERMS_PATH ?? 'terms'
 export async function getSources(input: GetSourcesInput): Promise<GetSourcesOutput | GetSourcesError> {
   const cache = getCache()
 
-  if (isCacheLoading()) {
+  if (isCacheUnavailable()) {
     return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
   }
 
