@@ -1,4 +1,4 @@
-import { getCache, isCacheLoading } from '../cache/termCache'
+import { getCache, isCacheUnavailable } from '../cache/termCache'
 import { usageLog } from '../lib/usageLog'
 
 const MAX_INPUT = 10_000
@@ -40,7 +40,7 @@ export async function suggestTerms(
     return { error: 'INPUT_TOO_LONG', message: 'Text exceeds 10,000 character limit.' }
   }
 
-  if (isCacheLoading()) {
+  if (isCacheUnavailable()) {
     return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
   }
 

@@ -13,6 +13,11 @@ export interface GitHubFile {
 
 const GITHUB_API_BASE = 'https://api.github.com'
 
+// Abort any single GitHub request that hangs, so a stalled connection can't
+// block loadCache() indefinitely (which would otherwise hold the cache in a
+// loading state forever).
+const FETCH_TIMEOUT_MS = 10_000
+
 function headers(): Record<string, string> {
   const h: Record<string, string> = {
     'Accept':     'application/vnd.github+json',
@@ -38,7 +43,7 @@ export async function fetchTermFileList(): Promise<GitHubFile[]> {
   }
 
   const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${path}`
-  const res = await fetch(url, { headers: headers() })
+  const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
 
   if (!res.ok) {
     throw new Error(`GitHub API error ${res.status} fetching file list: ${await res.text()}`)
@@ -53,7 +58,7 @@ export async function fetchTermFileList(): Promise<GitHubFile[]> {
  * Fetches the raw Markdown content for a single term file.
  */
 export async function fetchTermFileContent(downloadUrl: string): Promise<string> {
-  const res = await fetch(downloadUrl, { headers: headers() })
+  const res = await fetch(downloadUrl, { headers: headers(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
 
   if (!res.ok) {
     throw new Error(`GitHub API error ${res.status} fetching ${downloadUrl}: ${await res.text()}`)

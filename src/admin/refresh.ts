@@ -8,7 +8,7 @@
 
 import { timingSafeEqual } from 'crypto'
 import { Request, Response } from 'express'
-import { clearCache, loadCache } from '../cache/termCache'
+import { loadCache } from '../cache/termCache'
 
 export interface RefreshResponse {
   status:       'ok'
@@ -30,7 +30,9 @@ export async function handleAdminRefresh(req: Request, res: Response): Promise<v
   }
 
   try {
-    clearCache()
+    // loadCache() builds a new snapshot and swaps it in atomically; it must not
+    // be preceded by clearCache(), which would empty the live cache during the
+    // reload and lose all data if the reload then fails.
     const { termsLoaded, durationMs } = await loadCache()
     const body: RefreshResponse = { status: 'ok', terms_loaded: termsLoaded, duration_ms: durationMs }
     res.json(body)

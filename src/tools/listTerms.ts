@@ -1,4 +1,4 @@
-import { getCache, isCacheLoading } from '../cache/termCache'
+import { getCache, isCacheUnavailable } from '../cache/termCache'
 import { usageLog } from '../lib/usageLog'
 
 export interface ListTermsInput {
@@ -22,7 +22,7 @@ export type ListTermsError =
 export async function listTerms(
   input: ListTermsInput
 ): Promise<ListTermsOutput | ListTermsError> {
-  if (isCacheLoading()) {
+  if (isCacheUnavailable()) {
     return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
   }
 
