@@ -3,8 +3,7 @@
  * source URL for a given Lexicon term. Supports fuzzy matching.
  */
 
-import { getCache, isCacheUnavailable } from '../cache/termCache'
-import { fuzzyFindTerm } from '../lib/fuzzyMatch'
+import { resolveTerm, isResolveError } from '../lib/resolveTerm'
 import { usageLog } from '../lib/usageLog'
 
 export interface LookupTermInput {
@@ -34,24 +33,14 @@ export type LookupTermError =
   | { error: 'CACHE_UNAVAILABLE'; message: string }
 
 export async function lookupTerm(input: LookupTermInput): Promise<LookupTermOutput | LookupTermError> {
-  const cache = getCache()
+  const resolved = resolveTerm(input.term)
 
-  if (isCacheUnavailable()) {
-    return { error: 'CACHE_UNAVAILABLE', message: 'Term cache is currently loading. Retry in 10 seconds.' }
+  if (isResolveError(resolved)) {
+    if (resolved.error === 'TERM_NOT_FOUND') void usageLog({ tool: 'lookup_term', term_slug: undefined })
+    return resolved
   }
 
-  const term = fuzzyFindTerm(input.term, cache)
-
-  if (!term) {
-    const suggestions = [...cache.values()].slice(0, 3).map(t => t.title)
-    void usageLog({ tool: 'lookup_term', term_slug: undefined })
-    return {
-      error: 'TERM_NOT_FOUND',
-      message: `No Lexicon entry found for: '${input.term}'`,
-      suggestions,
-    }
-  }
-
+  const { term } = resolved
   void usageLog({ tool: 'lookup_term', term_slug: term.slug })
 
   return {
